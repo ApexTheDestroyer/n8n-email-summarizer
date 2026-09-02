@@ -9,29 +9,29 @@ This document details the complete architecture, routing rules, and operational 
 
 The workflow automatically monitors unread emails, applies cost-saving keyword pre-checks, summarizes relevant messages via Google Gemini AI, routes emergency alerts to team members, and archives processed items.
 
-[Gmail Trigger]
+## [Gmail Trigger]
 │
 ▼
-[Sender & Subject Filter] ──(Filtered Out)──► [Log Ignored] ──► [Mark Read]
+## [Sender & Subject Filter] ──(Filtered Out)──► [Log Ignored] ──► [Mark Read]
 │
 ▼
-[Emergency Keyword Pre-Check]
+## [Emergency Keyword Pre-Check]
 ├── (Contains Emergency Keyword) ──► Bypass Routine Filter ──┐
 └── (Standard Relevant Email) ──────────────────────────────┤
 │
 ▼
-[Gemini AI Summarizer]
+## [Gemini AI Summarizer]
 │
 ▼
-[Data & Subject Cleanup]
+## [Data & Subject Cleanup]
 │
 ▼
-[Priority Check Branch]
+## [Priority Check Branch]
 ├── (HIGH) ──► [Urgent Email Alert] ──┐
 └── (NORM) ──► [Standard Summary]  ──┤
 │
 ▼
-[Mark Read]
+## [Mark Read]
 
 
 ---
