@@ -1,60 +1,93 @@
-# Cloudflare Tunnel Integration & Configuration Guide
+# ☁️ Cloudflare Tunnel + n8n
 
-## Overview
+> **Securely expose a local n8n instance to the internet without opening router ports.**
+>
+> This guide covers **Cloudflare Quick Tunnels for development** and **Named Tunnels for production**, including Docker, webhooks, and Google OAuth 2.0.
 
-This document outlines the architecture, configuration, and operational workflow for exposing a local **n8n** automation instance to the public internet securely using **Cloudflare Tunnels** (`cloudflared`).
-
-By leveraging Cloudflare Tunnels, the n8n container running in a local WSL 2 / Docker Desktop environment can receive external webhook payloads and handle OAuth 2.0 authentication callbacks over a secure HTTPS endpoint—without opening router ports or exposing public IP addresses.
+![Cloudflare](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
+![n8n](https://img.shields.io/badge/n8n-Automation-EA4B71?style=for-the-badge&logo=n8n&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows_11-WSL2-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 
 ---
 
-## 1. System Architecture
+## 📑 Table of Contents
+
+- [🏗️ Architecture](#️-architecture)
+- [✅ Prerequisites](#-prerequisites)
+- [🚀 Quick Tunnel](#-quick-tunnel)
+- [🐳 n8n Docker Configuration](#-n8n-docker-configuration)
+- [🔐 Google OAuth 2.0](#-google-oauth-20)
+- [🌐 Production Named Tunnel](#-production-named-tunnel)
+- [🧪 Verification](#-verification)
+- [🛠️ Troubleshooting](#️-troubleshooting)
+- [🔄 Development to Production](#-development-to-production)
+- [🔒 Security Notes](#-security-notes)
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    A[External Webhook / Google OAuth] -->|HTTPS| B[Cloudflare Edge]
+    B -->|Tunnel| C[cloudflared on Windows Host]
+    C -->|HTTP localhost:5678| D[n8n Container]
+    D --> E[(n8n Data Volume)]
+```
+
+### Request flow
+
+| Layer | Component | Purpose |
+|---|---|---|
+| 🌍 1 | External service | Sends webhook or OAuth request |
+| ☁️ 2 | Cloudflare Edge | Receives HTTPS traffic |
+| 🔐 3 | Cloudflare Tunnel | Creates an outbound tunnel to your host |
+| 🖥️ 4 | `cloudflared` | Forwards traffic to local n8n |
+| ⚙️ 5 | n8n | Receives the request on port `5678` |
+
+> **Key benefit:** No router port forwarding is required, and your public IP does not need to be exposed to receive the traffic.
+
+---
+
+## ✅ Prerequisites
+
+Before starting, make sure you have:
+
+- **Windows 11**
+- **WSL 2 / Docker Desktop**
+- **n8n** running on port `5678`
+- **Cloudflare account**
+- **`cloudflared`** installed on the Windows host
+- A **custom domain** for production
+
+Verify n8n locally first:
 
 ```text
-[ External Webhook / Google OAuth ]
-                │
-                ▼
-       [ Cloudflare Edge Network ]
-                │
-                ▼
- [ cloudflared daemon on Host ]
-                │
-                ▼
- [ Local HTTP Proxy / Docker Host ]
-                │
-                ▼
-       [ n8n Container :5678 ]
+http://localhost:5678
+```
+
+Verify `cloudflared`:
+
+```powershell
+cloudflared --version
 ```
 
 ---
 
-## 2. Prerequisites & Environment Setup
+# 🚀 Quick Tunnel
 
-- **Host Environment:** Windows 11 / WSL 2 with Docker Desktop
-- **n8n Container:** Running on host port `5678`
-- **Cloudflare CLI (`cloudflared`):** Installed on the host system
-- **Cloudflare account:** Required for persistent named tunnels
-- **Custom domain:** Required for a stable production hostname
+Quick Tunnels are intended for **development and testing**. They generate a temporary hostname ending in `.trycloudflare.com`.
 
----
+## 1. Start the Quick Tunnel
 
-## 3. Quick Tunnel Setup (Development / Testing)
-
-Quick Tunnels generate a temporary HTTPS URL ending in `.trycloudflare.com`. They are useful for testing webhooks and OAuth callbacks without configuring a permanent Cloudflare Tunnel.
-
-### 3.1 Establishing the Tunnel
-
-Run the following command in PowerShell:
+Open **PowerShell**:
 
 ```powershell
 cloudflared tunnel --protocol http2 --url http://localhost:5678
 ```
 
-> **Note:** Forcing `--protocol http2` can be useful on Windows when QUIC/UDP transport causes confusing or incomplete console output.
-
-### 3.2 Output Verification
-
-Upon successful startup, `cloudflared` displays a temporary public endpoint similar to:
+### Example output
 
 ```text
 +--------------------------------------------------------------------------------------------+
@@ -63,25 +96,29 @@ Upon successful startup, `cloudflared` displays a temporary public endpoint simi
 +--------------------------------------------------------------------------------------------+
 ```
 
-The generated hostname is temporary and should be treated as a development/testing endpoint.
+Your hostname will be different.
+
+> [!IMPORTANT]
+> A Quick Tunnel hostname is temporary. When the tunnel is recreated, the hostname can change.
 
 ---
 
-## 4. Environment Variables & Docker Container Deployment
+# 🐳 n8n Docker Configuration
 
-n8n needs to know its externally reachable URL so that it can generate correct webhook and OAuth callback URLs.
+n8n must know its public HTTPS URL so that it can generate the correct webhook and OAuth URLs.
 
-### 4.1 Deployment Command
-
-PowerShell:
+## 2. Stop the existing n8n container
 
 ```powershell
-# Stop and remove existing container instance
 docker stop n8n
 docker rm n8n
+```
 
-# Spin up updated n8n container
-# Replace the WEBHOOK_URL value with the current Cloudflare hostname.
+## 3. Start n8n with the public Cloudflare URL
+
+Replace the example hostname with your current Quick Tunnel URL:
+
+```powershell
 docker run -d `
   --name n8n `
   --restart unless-stopped `
@@ -93,182 +130,318 @@ docker run -d `
   n8nio/n8n
 ```
 
-### 4.2 Important
+### Configuration summary
 
-A Quick Tunnel hostname changes when a new Quick Tunnel is created. When that happens, update `WEBHOOK_URL` and any external OAuth redirect URI settings to the new hostname.
+| Setting | Value | Purpose |
+|---|---|---|
+| Container | `n8n` | Container name |
+| Host port | `5678` | Local n8n access |
+| `WEBHOOK_URL` | Public HTTPS URL | Webhook/OAuth URL generation |
+| `N8N_RESTRICT_FILE_ACCESS_TO` | `/files/` | Restricts file access |
+| `n8n_data` | Docker volume | Persistent n8n data |
+| `C:\n8n:/files` | Bind mount | Exposes selected host files |
 
-For a persistent environment, use a **named Cloudflare Tunnel with a custom domain** instead of a Quick Tunnel.
+## 4. Confirm the container is running
+
+```powershell
+docker ps
+```
+
+You should see `n8n` with port `5678` published.
+
+You can also check logs:
+
+```powershell
+docker logs -f n8n
+```
 
 ---
 
-## 5. OAuth 2.0 & Identity Provider Alignment
+# 🔐 Google OAuth 2.0
 
-When moving from `localhost` to a Cloudflare HTTPS hostname, external identity providers must be configured with the exact callback URL generated by n8n.
+When n8n moves from `localhost` to HTTPS through Cloudflare, Google must be configured with the **exact same redirect URI**.
 
-### 5.1 Google Cloud Platform (GCP) Credentials Setup
+## 5. Configure Google Cloud
 
-1. Open **GCP Console** > **APIs & Services** > **Credentials**.
-2. Edit the relevant **OAuth 2.0 Client ID** configured as a Web Application.
-3. Under **Authorized redirect URIs**, add the n8n callback URL:
+Open:
+
+**Google Cloud Console → APIs & Services → Credentials**
+
+Edit the relevant **OAuth 2.0 Client ID** and add this under **Authorized redirect URIs**:
 
 ```text
 https://customise-dow-surprising-meet.trycloudflare.com/rest/oauth2-credential/callback
 ```
 
-4. Save the configuration.
+> [!WARNING]
+> The hostname must match the n8n public URL exactly. A mismatch can cause `redirect_uri_mismatch`.
 
-> The hostname must match the current n8n public URL exactly, including HTTPS and the callback path.
+## 6. Verify the n8n OAuth URL
 
-### 5.2 n8n Credential Synchronization
+In n8n:
 
-1. Open the n8n dashboard through the Cloudflare URL:
+**Settings → Credentials → Gmail OAuth2 API**
 
-```text
-https://customise-dow-surprising-meet.trycloudflare.com
-```
-
-2. Go to **Settings > Credentials**.
-3. Open the **Gmail OAuth2 API** credential.
-4. Confirm that the displayed OAuth Redirect URL is:
+Confirm the OAuth Redirect URL is:
 
 ```text
 https://customise-dow-surprising-meet.trycloudflare.com/rest/oauth2-credential/callback
 ```
 
-5. Use **Reconnect / Switch account** and complete the Google authorization flow.
+Then:
+
+1. Select **Reconnect** or **Switch account**.
+2. Sign in with Google.
+3. Grant the required permissions.
+4. Return to n8n and verify the credential is connected.
 
 ---
 
-## 6. Migration Path to a Named Production Tunnel
+# 🌐 Production Named Tunnel
 
-Quick Tunnels are temporary. For a stable production URL, create a named tunnel and connect it to a custom domain.
+For production, use a **Named Tunnel** with a stable custom domain instead of a Quick Tunnel.
 
-### 6.1 Domain & Tunnel Provisioning
+## 7. Create the tunnel
 
-1. Open the **Cloudflare Zero Trust** dashboard.
-2. Navigate to **Networks > Tunnels**.
-3. Select **Create a Tunnel**.
-4. Name the tunnel, for example:
+In the **Cloudflare Zero Trust dashboard**:
+
+**Networks → Tunnels → Create a Tunnel**
+
+Example tunnel name:
 
 ```text
 n8n-tunnel
 ```
 
-5. Install `cloudflared` as a persistent service on the Windows host using the tunnel token supplied by Cloudflare:
+## 8. Install the Windows service
+
+Cloudflare provides a tunnel token for the connector. Install it as a service:
 
 ```powershell
 cloudflared.exe service install <TOKEN>
 ```
 
-> Keep the tunnel token private. Do not commit it to Git, documentation, or public repositories.
+> [!CAUTION]
+> Never publish `<TOKEN>` or a real tunnel token in GitHub, screenshots, documentation, or `.env` files committed to a repository.
 
-### 6.2 Public Hostname Routing
+## 9. Add the public hostname
 
-In the tunnel configuration, add a published application/public hostname:
+Create a **Published Application** route:
 
-```text
-Subdomain: n8n
-Domain:    yourdomain.com
-Service:  http://localhost:5678
-```
+| Field | Value |
+|---|---|
+| Subdomain | `n8n` |
+| Domain | `yourdomain.com` |
+| Service | `http://localhost:5678` |
 
-The resulting public URL is:
+Your production URL becomes:
 
 ```text
 https://n8n.yourdomain.com
 ```
 
-### 6.3 Docker Container Update for Production
+---
 
-Set n8n's public URL to the stable Cloudflare hostname.
+# 🐳 Production n8n Configuration
 
-Example `docker-compose.yml`:
+Update `WEBHOOK_URL` to the permanent hostname.
+
+### `docker-compose.yml`
 
 ```yaml
 environment:
   - WEBHOOK_URL=https://n8n.yourdomain.com/
 ```
 
-If additional n8n URL-related environment variables are configured in the deployment, make sure they are consistent with the same public HTTPS hostname.
+### Docker Run example
+
+```powershell
+docker run -d `
+  --name n8n `
+  --restart unless-stopped `
+  -p 5678:5678 `
+  -e WEBHOOK_URL=https://n8n.yourdomain.com/ `
+  -e N8N_RESTRICT_FILE_ACCESS_TO=/files/ `
+  -v n8n_data:/home/node/.n8n `
+  -v C:\n8n:/files `
+  n8nio/n8n
+```
+
+After the production hostname is active, update the Google OAuth redirect URI as well:
+
+```text
+https://n8n.yourdomain.com/rest/oauth2-credential/callback
+```
 
 ---
 
-## 7. Troubleshooting & Verification
+# 🧪 Verification
 
-| Issue | Likely Cause | Solution |
-|---|---|---|
-| Console output appears stalled or incomplete | QUIC/UDP transport behavior on the Windows console/network | Retry with `--protocol http2` for the Quick Tunnel command |
-| `redirect_uri_mismatch` | OAuth provider callback URL does not exactly match n8n's current public callback URL | Synchronize the exact HTTPS callback URL in GCP and n8n |
-| Cloudflare dashboard shows `0 Routes` | Tunnel exists but no public hostname/published application route is configured | Add a published application and map it to `http://localhost:5678` |
-| n8n webhooks still use `localhost` | Public URL environment configuration is missing or stale | Update `WEBHOOK_URL` to the current public HTTPS hostname and restart n8n |
-| Quick Tunnel URL stopped working | Quick Tunnel was temporary or the `cloudflared` process exited | Restart the Quick Tunnel and update the n8n/OAuth URLs |
-| OAuth works locally but not through Cloudflare | Provider only has the localhost redirect URI registered | Add the exact Cloudflare HTTPS callback URI to the OAuth client configuration |
-| Browser reaches Cloudflare but n8n is unavailable | Local n8n service is stopped or port `5678` is not reachable from the host | Verify the container is running and `http://localhost:5678` works locally |
+Run through these checks after configuration.
 
----
-
-## 8. Verification Checklist
-
-Use this checklist after configuring the tunnel:
-
-### Cloudflare
+## Cloudflare
 
 - [ ] `cloudflared` is running
-- [ ] The tunnel is connected
-- [ ] A public hostname is configured for production
-- [ ] The hostname resolves over HTTPS
+- [ ] Tunnel status is healthy
+- [ ] Public hostname is configured
+- [ ] HTTPS hostname opens successfully
+- [ ] Hostname points to `http://localhost:5678`
 
-### Docker / n8n
+## Docker / n8n
 
-- [ ] Container `n8n` is running
-- [ ] Host port `5678` is published
+- [ ] `n8n` container is running
+- [ ] Port `5678` is published
 - [ ] `WEBHOOK_URL` matches the public HTTPS URL
-- [ ] n8n data volume is mounted correctly
-- [ ] Local URL `http://localhost:5678` works
+- [ ] `n8n_data` volume is present
+- [ ] `http://localhost:5678` works locally
 
-### OAuth
+## OAuth
 
-- [ ] Google OAuth client uses the exact Cloudflare callback URL
-- [ ] n8n displays the same callback URL
-- [ ] OAuth credential reconnect succeeds
+- [ ] Google OAuth client has the correct callback URI
+- [ ] n8n shows the same callback URI
+- [ ] OAuth reconnect succeeds
+- [ ] Google authorization completes successfully
 
-### Webhooks
+## Webhooks
 
-- [ ] Test webhook is activated
+- [ ] Workflow is active
 - [ ] External service can reach the public URL
-- [ ] n8n receives the webhook request
-- [ ] Workflow execution is visible in n8n
+- [ ] Test webhook is received
+- [ ] Workflow execution appears in n8n
 
 ---
 
-## 9. Recommended Development-to-Production Workflow
+# 🛠️ Troubleshooting
 
-### Development
+| Problem | Likely cause | Fix |
+|---|---|---|
+| Console appears stuck or incomplete | QUIC/UDP behavior | Retry with `--protocol http2` |
+| `redirect_uri_mismatch` | Google URI differs from n8n URI | Match the exact HTTPS callback URL |
+| Cloudflare shows `0 Routes` | No public hostname is configured | Add a Published Application route |
+| Webhook still uses `localhost` | `WEBHOOK_URL` is missing/stale | Update `WEBHOOK_URL` and recreate/restart n8n |
+| Quick Tunnel URL stops working | Temporary tunnel ended | Restart `cloudflared` and update URLs |
+| OAuth works locally but not through Cloudflare | Google only has localhost configured | Add the Cloudflare callback URI |
+| Cloudflare opens but n8n does not respond | n8n/container/port issue | Check `docker ps`, logs, and port `5678` |
 
-1. Start n8n on `localhost:5678`.
-2. Start a Quick Tunnel with `cloudflared`.
-3. Copy the temporary HTTPS hostname.
-4. Set `WEBHOOK_URL` to that hostname.
-5. Configure the matching OAuth redirect URI.
-6. Test webhooks and OAuth authentication.
+### Useful diagnostic commands
 
-### Production
+Check n8n:
 
-1. Create a named Cloudflare Tunnel.
-2. Attach a custom domain/subdomain.
-3. Configure the tunnel service as `http://localhost:5678`.
-4. Set n8n's `WEBHOOK_URL` to the permanent HTTPS hostname.
-5. Update Google OAuth redirect URIs to the permanent callback URL.
-6. Restart n8n and perform end-to-end webhook/OAuth testing.
-7. Keep the tunnel token and other secrets out of source control.
+```powershell
+docker ps
+docker logs --tail 100 n8n
+```
+
+Check local access:
+
+```powershell
+curl http://localhost:5678
+```
+
+Check the installed Cloudflare CLI:
+
+```powershell
+cloudflared --version
+```
 
 ---
 
-## 10. Security Notes
+# 🔄 Development to Production
 
-- Do not expose Docker's management API or unrelated local services through the tunnel.
-- Only publish the n8n service that needs external access.
-- Keep Cloudflare tunnel tokens, OAuth client secrets, and n8n encryption credentials private.
-- Use a named tunnel and stable custom hostname for production rather than relying on a Quick Tunnel.
-- Restrict access to sensitive n8n functionality using n8n authentication and, where appropriate, Cloudflare Access policies.
-- Regularly review Cloudflare Tunnel routes and remove unused public hostnames.
+## Development
+
+```text
+n8n localhost:5678
+        │
+        ▼
+Quick Tunnel
+        │
+        ▼
+*.trycloudflare.com
+        │
+        ▼
+Testing Webhooks + OAuth
+```
+
+## Production
+
+```text
+n8n localhost:5678
+        │
+        ▼
+Named Cloudflare Tunnel
+        │
+        ▼
+n8n.yourdomain.com
+        │
+        ▼
+Production Webhooks + OAuth
+```
+
+### Recommended migration sequence
+
+1. Run n8n locally on port `5678`.
+2. Test with a Quick Tunnel.
+3. Set `WEBHOOK_URL` to the temporary HTTPS URL.
+4. Configure and test the Google OAuth redirect URI.
+5. Create the Named Tunnel.
+6. Attach your custom domain/subdomain.
+7. Point the hostname to `http://localhost:5678`.
+8. Change `WEBHOOK_URL` to the permanent URL.
+9. Update Google OAuth to the permanent callback URL.
+10. Test webhooks and OAuth again.
+
+---
+
+# 🔒 Security Notes
+
+> [!IMPORTANT]
+> Cloudflare Tunnel removes the need for inbound router port forwarding, but it does **not** replace application security.
+
+### Recommended practices
+
+- Keep the n8n editor protected with strong authentication.
+- Never commit Cloudflare tunnel tokens or API credentials.
+- Never commit OAuth client secrets.
+- Keep secrets in environment variables or another secure secret store.
+- Use a stable Named Tunnel for production.
+- Restrict file access to the intended directory.
+- Keep Docker and n8n updated.
+- Review Cloudflare Access policies for sensitive deployments.
+
+---
+
+## ✅ Final Production Checklist
+
+| Area | Status |
+|---|---|
+| Cloudflare Named Tunnel | ⬜ |
+| Stable DNS hostname | ⬜ |
+| `cloudflared` Windows service | ⬜ |
+| n8n on `localhost:5678` | ⬜ |
+| `WEBHOOK_URL` configured | ⬜ |
+| Google OAuth redirect URI | ⬜ |
+| Webhook test successful | ⬜ |
+| OAuth test successful | ⬜ |
+| Secrets excluded from Git | ⬜ |
+| n8n authentication enabled | ⬜ |
+
+---
+
+## 📌 Important URLs
+
+| Purpose | URL |
+|---|---|
+| Local n8n | `http://localhost:5678` |
+| Quick Tunnel | `https://<temporary>.trycloudflare.com` |
+| Production n8n | `https://n8n.yourdomain.com` |
+| OAuth callback | `https://n8n.yourdomain.com/rest/oauth2-credential/callback` |
+
+---
+
+<div align="center">
+
+**Cloudflare Tunnel + n8n**  
+*Secure public access for local automation workflows*
+
+</div>
