@@ -102,4 +102,4 @@ docker compose logs -f n8n postgres
 ### Never commit raw API keys, OAuth client secrets, or database passwords to public repositories. All sensitive configurations should be managed within n8n Credentials or passed via external .env environment files.
 ### EOF
 
-*text* ### git add README.md && git commit -m "docs: update README.md with complete architecture, feature set, and documentation links" && git push origin main
+### git add README.md && git commit -m "docs: update README.md with complete architecture, feature set, and documentation links" && git push origin main
