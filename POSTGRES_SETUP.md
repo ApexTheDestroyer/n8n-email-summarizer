@@ -55,26 +55,3 @@ services:
       DB_POSTGRESDB_DATABASE: n8n_db
       DB_POSTGRESDB_USER: n8n_user
       DB_POSTGRESDB_PASSWORD: n8n_secure_password_123
-
-      3. Useful Maintenance Commands
-Run these terminal commands from the directory containing your docker-compose.yml file:
-
-Access the PostgreSQL shell:
-
-Bash
-docker exec -it n8n_postgres psql -U n8n_user -d n8n_db
-Check database health status:
-
-Bash
-docker inspect --format "{{json .State.Health}}" n8n_postgres
-Create a database backup:
-
-Bash
-docker exec -t n8n_postgres pg_dump -U n8n_user n8n_db > n8n_db_backup.sql
-Restore from a backup:
-
-Bash
-cat n8n_db_backup.sql | docker exec -i n8n_postgres psql -U n8n_user -d n8n_db
-EOF
-
-git add POSTGRES_SETUP.md && git commit -m "docs: add POSTGRES_SETUP.md for n8n database configuration" && git push origin main
