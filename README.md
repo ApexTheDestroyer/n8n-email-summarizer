@@ -63,14 +63,14 @@ The workflow monitors incoming Gmail messages, filters routine operational repor
 ## 📁 Repository Structure & Documentation
 ### Plaintext
 ### n8n-email-summarizer/
-│
-├── README.md               # Main project overview & architecture
-├── WORKFLOW_GUIDE.md       # Detailed node breakdown & pipeline logic
-├── POSTGRES_SETUP.md       # PostgreSQL configuration & database commands
-├── CLOUDFLARE_TUNNEL.md    # Remote webhook setup via Cloudflare Tunnel
-├── N8N_ARCHITECTURE.md    # Core architecture & design principles
-├── INSTALLATION.md         # Full Windows, WSL 2, and Docker installation guide
-└── docker-compose.yml      # Docker compose definition (n8n + postgres)
+### │
+### ├── README.md               # Main project overview & architecture
+### ├── WORKFLOW_GUIDE.md       # Detailed node breakdown & pipeline logic
+### ├── POSTGRES_SETUP.md       # PostgreSQL configuration & database commands
+### ├── CLOUDFLARE_TUNNEL.md    # Remote webhook setup via Cloudflare Tunnel
+### ├── N8N_ARCHITECTURE.md    # Core architecture & design principles
+### ├── INSTALLATION.md         # Full Windows, WSL 2, and Docker installation guide
+### └── docker-compose.yml      # Docker compose definition (n8n + postgres)
 ### 📖 Complete Documentation Links
 ### ⚡ Workflow Architecture Guide: Node-by-node logic, filters, and prompt specifications.
 
