@@ -1,5 +1,5 @@
 cat << 'EOF' > WORKFLOW_GUIDE.md
-# ⚡ n8n Email & MIS Automated Summarizer Guide
+# ⚡ n8n Email & MIS Automated Summarize Guide
 
 This document details the complete architecture, routing rules, and operational workflow for the automated email summarization pipeline in `ApexTheDestroyer/n8n-email-summarizer`.
 
