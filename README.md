@@ -1,193 +1,104 @@
-# 📧 Automated Email Summarizer Pipeline — n8n + Google Gemini
+cat << 'EOF' > README.md
+# 📧 Automated Email Summarizer & MIS Alert Pipeline
 
-An automated, self-hosted email summarization pipeline built with **n8n**, **Gmail**, **Google Gemini AI**, **Docker Desktop**, and **WSL 2**.
+An automated, self-hosted email filtering, summarization, and emergency escalation pipeline built with **n8n**, **Google Gemini AI**, **PostgreSQL**, and **Docker Desktop**.
 
-The workflow monitors Gmail for unread emails, sends the email body to Gemini, generates a concise summary, converts the result into a `.txt` file, saves it to the Windows host, and sends a summary notification.
-
----
-
-## 🏗️ Pipeline Architecture
-
-```text
-Gmail
-  │
-  ▼
-Gmail Trigger
-  │
-  ▼
-Google Gemini AI
-  │
-  ▼
-Edit Fields
-  │
-  ▼
-Convert to File
-  │
-  ▼
-Read/Write Files
-  │
-  ▼
-C:\n8n
-  │
-  └──────────────► Send Summary Email
-```
+The workflow monitors incoming Gmail messages, filters routine operational reports to prevent token waste, checks for critical outage keywords, summarizes actionable emails via Gemini 1.5 Flash, and routes priority alerts to key team members.
 
 ---
 
-## ⚡ Quick Overview
-
-The project runs locally using:
+## 🏗️ System Architecture
 
 ```text
-Windows
-   ↓
-WSL 2
-   ↓
-Docker Desktop
-   ↓
-n8n
-   ├── Gmail
-   ├── Google Gemini
-   └── C:\n8n file storage
-```
+               ┌────────────────────────────────────────────────────────┐
+               │                     Gmail Trigger                      │
+               └───────────────────────────┬────────────────────────────┘
+                                           │
+                                           ▼
+                       ┌──────────────────────────────────────┐
+                       │  02. Sender & Subject Keyword Filter  │
+                       └───────────────────┬──────────────────┘
+                                           │
+                   ┌───────────────────────┴───────────────────────┐
+                   │                                               │
+                   ▼                                               ▼
+         [Standard / Routine Mail]                        [Approved Stream]
+                   │                                               │
+                   ▼                                               ▼
+     ┌───────────────────────────┐                   ┌───────────────────────────┐
+     │ 03. Emergency Pre-Check   │                   │ 04. AI: Gemini Summarizer │
+     │  (outage/urgent/critical) │                   └─────────────┬─────────────┘
+     └─────────────┬─────────────┘                                 │
+                   │                                               │
+       ┌───────────┴───────────┐                                   │
+       │                       │                                   │
+ (No Emergency)          (Emergency Match)                         │
+       │                       │                                   │
+       ▼                       └───────────────────┐               │
+┌──────────────┐                                   │               │
+│ FILTERED_OUT │                                   ▼               ▼
+│  (Mark Read) │                       ┌───────────────────────────────┐
+└──────────────┘                       │ 05. Data Cleanup & Formatting │
+                                       └───────────────┬───────────────┘
+                                                       │
+                                     ┌─────────────────┴─────────────────┐
+                                     │                                   │
+                                     ▼                                   ▼
+                           ┌───────────────────┐               ┌───────────────────┐
+                           │ High Priority     │               │ Normal Priority   │
+                           │ Emergency Alert   │               │ Summary Email     │
+                           └───────────────────┘               └───────────────────┘
+⚡ Key Features
+Zero-Token Routine Filtering: Automatically logs routine mail (HR ANNOUNCEMENT, Unclosed WOs Report) as FILTERED_OUT without sending payload to Gemini API, conserving token quota.
 
-Generated summary files are written to:
+Emergency Keyword Override: Intercepts critical body keywords (urgent, outage, down, critical, breach, failure) and forces instant Gemini priority analysis regardless of sender routines.
 
-```text
-C:\n8n
-```
+AI-Powered Summarization: Uses gemini-1.5-flash to generate concise, 1-line key issue descriptions and action requirements.
 
-n8n is available at:
+Targeted Escalations: Directs high-priority alerts to dedicated emergency team lists while sending standard summaries to routine stakeholders.
 
-```text
-http://localhost:5678
-```
+PostgreSQL Engine: Runs on a dedicated PostgreSQL 16 database backend (n8n_postgres) for execution history and operational persistence.
 
----
-
-## 📖 Installation
-
-The complete Windows setup is documented separately so the main README stays easy to read.
-
-👉 **[Open the complete INSTALLATION.md setup guide](./INSTALLATION.md)**
-
-The installation guide covers:
-
-- WSL 2 installation
-- Ubuntu setup
-- Docker Desktop installation
-- Docker Desktop WSL integration
-- Docker verification
-- Windows `C:\n8n` storage setup
-- Persistent `n8n_data` volume
-- `docker-compose.yml` creation
-- n8n startup
-- File-mount testing
-- Gmail configuration
-- Google Gemini configuration
-- Workflow configuration
-- End-to-end testing
-- Troubleshooting
-- Docker maintenance commands
-
----
-
-## 🐳 Docker
-
-The project uses:
-
-```text
-n8nio/n8n
-```
-
-The Compose configuration provides:
-
-| Component | Configuration |
-|---|---|
-| Web UI | `localhost:5678` |
-| Container | `n8n` |
-| Persistent data | `n8n_data` |
-| Container files | `/files` |
-| Windows files | `C:\n8n` |
-
-Start the project:
-
-```powershell
-docker compose up -d
-```
-
-Stop the project:
-
-```powershell
-docker compose down
-```
-
-View logs:
-
-```powershell
-docker compose logs -f n8n
-```
-
----
-
-## 📁 Repository Structure
-
-```text
+📁 Repository Structure & Documentation
+Plaintext
 n8n-email-summarizer/
 │
-├── README.md
-├── INSTALLATION.md
-└── docker-compose.yml
-```
+├── README.md               # Main project overview & architecture
+├── WORKFLOW_GUIDE.md       # Detailed node breakdown & pipeline logic
+├── POSTGRES_SETUP.md       # PostgreSQL configuration & database commands
+├── CLOUDFLARE_TUNNEL.md    # Remote webhook setup via Cloudflare Tunnel
+├── N8N_ARCHITECTURE.md    # Core architecture & design principles
+├── INSTALLATION.md         # Full Windows, WSL 2, and Docker installation guide
+└── docker-compose.yml      # Docker compose definition (n8n + postgres)
+📖 Complete Documentation Links
+⚡ Workflow Architecture Guide: Node-by-node logic, filters, and prompt specifications.
 
-### `README.md`
+🐘 PostgreSQL Setup Guide: Database credentials, schema specs, and backup/restore commands.
 
-Project overview and architecture.
+🌐 Cloudflare Tunnel Guide: External webhook exposure and security setup.
 
-### `INSTALLATION.md`
+🏗️ System Architecture: High-level infrastructure breakdown.
 
-Complete installation and configuration instructions.
+🛠️ Complete Installation Guide: WSL 2, Docker Desktop, and environment variables.
 
-### `docker-compose.yml`
+🐳 Quick Start (Docker Compose)
+The environment runs two coupled services defined in docker-compose.yml:
 
-Docker configuration used to run n8n.
+n8n: Automation server accessible at http://localhost:5678
 
----
+PostgreSQL: System database running postgres:16-alpine
 
-## 🔐 Security
+Start Services
+Bash
+docker compose up -d
+Stop Services
+Bash
+docker compose down
+View Real-Time Logs
+Bash
+docker compose logs -f n8n postgres
+🔐 Security
+Never commit raw API keys, OAuth client secrets, or database passwords to public repositories. All sensitive configurations should be managed within n8n Credentials or passed via external .env environment files.
+EOF
 
-Never commit API keys, OAuth secrets, passwords, access tokens, or other credentials to GitHub.
-
-Use n8n Credentials or an appropriate secret-management mechanism.
-
----
-
-## 🎯 Result
-
-Once configured:
-
-```text
-Unread Gmail
-     ↓
-Gmail Trigger
-     ↓
-Gemini AI
-     ↓
-Summary
-     ↓
-TXT File
-     ↓
-C:\n8n
-     ↓
-Summary Email
-```
-
----
-
-## 📚 Documentation
-
-- [Complete Installation Guide](./INSTALLATION.md)
-- [Docker Compose](./docker-compose.yml)
-- [WSL Documentation](https://learn.microsoft.com/en-us/windows/wsl/install)
-- [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
-- [n8n Documentation](https://docs.n8n.io/)
+git add README.md && git commit -m "docs: update README.md with complete architecture, feature set, and documentation links" && git push origin main
