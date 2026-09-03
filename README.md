@@ -10,7 +10,7 @@ The workflow monitors incoming Gmail messages, filters routine operational repor
 ## 🏗️ System Architecture
 
 ```text
- ┌────────────────────────────────────────────────────────┐
+               ┌────────────────────────────────────────────────────────┐
                │                01. Gmail Trigger (Unread)              │
                └───────────────────────────┬────────────────────────────┘
                                            │
