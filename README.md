@@ -10,44 +10,48 @@ The workflow monitors incoming Gmail messages, filters routine operational repor
 ## 🏗️ System Architecture
 
 ```text
-               ┌────────────────────────────────────────────────────────┐
-               │                     Gmail Trigger                      │
+ ┌────────────────────────────────────────────────────────┐
+               │                01. Gmail Trigger (Unread)              │
                └───────────────────────────┬────────────────────────────┘
                                            │
                                            ▼
                        ┌──────────────────────────────────────┐
-                       │  02. Sender & Subject Keyword Filter  │
+                       │       02. Emergency Pre-Check        │
+                       │   (Checks subject AND body text)     │
                        └───────────────────┬──────────────────┘
                                            │
                    ┌───────────────────────┴───────────────────────┐
-                   │                                               │
+                   │ (TRUE: Emergency Match)                       │ (FALSE: Non-Emergency)
                    ▼                                               ▼
-         [Standard / Routine Mail]                        [Approved Stream]
+                   │                               ┌───────────────────────────────┐
+                   │                               │   03. Standard Stream Filter  │
+                   │                               └───────────────┬───────────────┘
                    │                                               │
-                   ▼                                               ▼
-     ┌───────────────────────────┐                   ┌───────────────────────────┐
-     │ 03. Emergency Pre-Check   │                   │ 04. AI: Gemini Summarizer │
-     │  (outage/urgent/critical) │                   └─────────────┬─────────────┘
-     └─────────────┬─────────────┘                                 │
-                   │                                               │
-       ┌───────────┴───────────┐                                   │
-       │                       │                                   │
- (No Emergency)          (Emergency Match)                         │
-       │                       │                                   │
-       ▼                       └───────────────────┐               │
-┌──────────────┐                                   │               │
-│ FILTERED_OUT │                                   ▼               ▼
-│  (Mark Read) │                       ┌───────────────────────────────┐
-└──────────────┘                       │ 05. Data Cleanup & Formatting │
-                                       └───────────────┬───────────────┘
-                                                       │
-                                     ┌─────────────────┴─────────────────┐
-                                     │                                   │
-                                     ▼                                   ▼
-                           ┌───────────────────┐               ┌───────────────────┐
-                           │ High Priority     │               │ Normal Priority   │
-                           │ Emergency Alert   │               │ Summary Email     │
-                           └───────────────────┘               └───────────────────┘
+                   │                       ┌───────────────────────┴───────────────────────┐
+                   │                       │ (TRUE: Approved Stream)                       │ (FALSE: Ignored Stream)
+                   ▼                       ▼                                               ▼
+     ┌──────────────────────────────────────────┐                             ┌───────────────────────────┐
+     │         04. Gemini AI Processing         │                             │  08. Mark Email as Read   │
+     │         (Summarization & Action)         │                             │       (Filtered Out)      │
+     └─────────────────────┬────────────────────┘                             └───────────────────────────┘
+                           │
+                           ▼
+     ┌──────────────────────────────────────────┐
+     │      05. Data Formatting & Priority      │
+     └─────────────────────┬────────────────────┘
+                           │
+                           ▼
+     ┌──────────────────────────────────────────┐
+     │          06. Escalation Router           │
+     └─────────────────────┬────────────────────┘
+                           │
+         ┌─────────────────┴─────────────────┐
+         │ (HIGH_PRIORITY)                   │ (NORMAL)
+         ▼                                   ▼
+┌───────────────────────────┐       ┌───────────────────────────┐
+│ 07a. High Priority        │       │ 07b. Normal Priority      │
+│      Emergency Alert      │       │      Summary Email        │
+└───────────────────────────┘       └───────────────────────────┘
 ```
 ##⚡ Key Features
 ### Zero-Token Routine Filtering: Automatically logs routine mail (HR ANNOUNCEMENT, Unclosed WOs Report) as FILTERED_OUT without sending payload to Gemini API, conserving token quota.
